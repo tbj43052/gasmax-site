@@ -1,4 +1,5 @@
-<title>$GASMAX Pit Stop</title>
+  setProgress(0.6, 'Decoding model');
+  const b64 = (document.getElementById('gasmaxModel') || {}).textContent || '';<title>$GASMAX Pit Stop</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="$GASMAX: a racing-themed memecoin whose flat 2% tax is routed back to traders, holders, stakers, the burn and locked liquidity. Nothing to a dev wallet.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -458,6 +459,17 @@
   .rrow{color:var(--silver-2)}
   .lever{font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:.04em}
   .toast{font-family:var(--body);font-weight:700}
+  /* 3D mount is present from first paint; the flat SVG is a failure-only fallback */
+  .rig3d{display:block;position:relative}
+  .scene svg.rig{display:none}
+  .scene.nogl svg.rig{display:block}
+  .scene.nogl .rig3d{display:none}
+  .rig3d canvas{opacity:0;transition:opacity .7s ease}
+  .rig3d.on canvas{opacity:1}
+  .rig-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);background:radial-gradient(ellipse 60% 50% at 50% 60%,rgba(0,200,5,.08),transparent 70%);transition:opacity .4s}
+  .rig-loading .bar{width:180px;height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden}
+  .rig-loading .bar i{display:block;height:100%;width:4%;background:var(--green);transition:width .25s}
+  .rig3d.on .rig-loading{opacity:0;pointer-events:none}
 </style>
 
 <a class="skip" href="#main">Skip to content</a>
@@ -505,7 +517,7 @@
         <button type="button" id="soundBtn" aria-pressed="true">Sound on</button>
       </div>
       <div class="overheat" id="overheat" hidden role="status">▲ System overheating: gas too high</div>
-      <div class="rig3d" id="rig3d" aria-hidden="true"></div>
+      <div class="rig3d" id="rig3d" aria-hidden="true"><div class="rig-loading" id="rigLoading"><span id="rigLoadText">Loading pit lane</span><div class="bar"><i id="rigLoadBar"></i></div></div></div>
       <svg class="rig" viewBox="0 0 900 300" aria-label="F1 car refuelling at the GASMAX glass pump" role="img">
         <defs>
           <linearGradient id="bodyG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c2622"></stop><stop offset="1" stop-color="#060a08"></stop></linearGradient>
@@ -1337,8 +1349,13 @@ import { Reflector } from 'https://cdn.jsdelivr.net/npm/three@0.184.0/examples/j
 'use strict';
 const host = document.getElementById('rig3d');
 if (!host) return;
+const sceneEl0 = host.closest('.scene');
+const bar = document.getElementById('rigLoadBar'), txt = document.getElementById('rigLoadText');
+const setProgress = (f, label) => { if (bar) bar.style.width = Math.max(4, Math.round(f * 100)) + '%'; if (txt && label) txt.textContent = label; };
+const showFallback = () => { if (sceneEl0) sceneEl0.classList.add('nogl'); };
 let renderer;
-try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' }); } catch (e) { return; }
+try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' }); } catch (e) { showFallback(); return; }
+setProgress(0.08, 'Loading pit lane');
 
 /* ---------- loader: Draco-enabled GLTFLoader ---------- */
 const MODEL_URL = 'https://files.catbox.moe/wz8ts8.glb';
@@ -1346,13 +1363,14 @@ const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
 const loader = new GLTFLoader();
 loader.setDRACOLoader(dracoLoader);
+const loadUrl = (url) => new Promise((res, rej) => loader.load(url, res, (xhr) => { if (xhr.total) { const f = xhr.loaded / xhr.total; setProgress(0.1 + 0.8 * f, 'Loading pit lane ' + Math.round(f * 100) + '%'); } }, rej));
 async function loadModel() {
   const forceEmbedded = /[?&]embedded/.test(location.search);
   if (!forceEmbedded) {
     /* 1. the merged model at its published URL (needs CORS + a network that allows it) */
-    try { return await loader.loadAsync(MODEL_URL); } catch (e) { console.warn('GASMAX: remote model unavailable, trying the local copy', e && e.message); }
+    try { return await loadUrl(MODEL_URL); } catch (e) { console.warn('GASMAX: remote model unavailable, trying the local copy', e && e.message); }
     /* 2. a same-origin slim copy next to the page */
-    try { return await loader.loadAsync('assets/gasmax-lite.glb'); } catch (e) { console.warn('GASMAX: local copy unavailable, using the embedded copy'); }
+    try { return await loadUrl('assets/gasmax-lite.glb'); } catch (e) { console.warn('GASMAX: local copy unavailable, using the embedded copy'); }
   }
   /* 3. the slim copy embedded in the page (no network, no Draco needed) */
   const b64 = (document.getElementById('gasmaxModel') || {}).textContent || '';
@@ -1362,7 +1380,8 @@ async function loadModel() {
   return await loader.parseAsync(bytes.buffer, '');
 }
 let gltf;
-try { gltf = await loadModel(); } catch (e) { console.error('GASMAX: model failed to load', e); return; }
+try { gltf = await loadModel(); } catch (e) { console.error('GASMAX: model failed to load', e); showFallback(); return; }
+setProgress(0.95, 'Building scene');
 const root = gltf.scene;
 
 /* ---------- materials: carbon body, neon trim ---------- */
