@@ -23,7 +23,7 @@
   body{margin:0;background:transparent;position:relative;color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
   [hidden]{display:none!important}
   /* ---------- full-page loading screen */
-  .site-loader{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:36px;background-color:#0A0A0C;background-image:radial-gradient(ellipse 70% 45% at 50% 26%,rgba(255,255,255,.045),transparent 70%),radial-gradient(ellipse 42% 22% at 50% 64%,rgba(0,255,102,.05),transparent 70%),radial-gradient(circle at 50% 50%,rgba(255,255,255,.035) 0 .8px,transparent 1.4px),radial-gradient(circle at 0 0,rgba(255,255,255,.028) 0 .8px,transparent 1.4px);background-size:100% 100%,100% 100%,6px 6px,6px 6px;background-position:0 0,0 0,0 0,3px 3px;transition:opacity .7s ease,visibility .7s;font-family:var(--body)}
+  .site-loader{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:36px;background-color:#0A0A0C;background-image:radial-gradient(ellipse 70% 45% at 50% 26%,rgba(255,255,255,.045),transparent 70%),radial-gradient(ellipse 42% 22% at 50% 64%,rgba(0,255,102,.05),transparent 70%),radial-gradient(circle at 50% 50%,rgba(255,255,255,.035) 0 .8px,transparent 1.4px),radial-gradient(circle at 0 0,rgba(255,255,255,.028) 0 .8px,transparent 1.4px);background-size:100% 100%,100% 100%,6px 6px,6px 6px;background-position:0 0,0 0,0 0,3px 3px;transition:opacity .7s ease,visibility .7s;will-change:opacity;font-family:var(--body)}
   .site-loader.out{opacity:0;visibility:hidden;pointer-events:none}
   html.is-loading{overflow:hidden}
   .sl-head{display:flex;flex-direction:column;align-items:center;gap:14px;opacity:0;transition:opacity .5s ease}
@@ -33,8 +33,8 @@
   .sl-row{display:flex;align-items:center;gap:16px}
   .sl-frame{position:relative;width:min(340px,62vw);padding:3px;border-radius:7px;background:linear-gradient(180deg,#2b2f34,#15181b);box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 -1px 0 rgba(0,0,0,.7),0 1px 0 rgba(255,255,255,.04),0 6px 18px rgba(0,0,0,.6)}
   .sl-track{position:relative;height:6px;border-radius:4px;background:#0b0d0f;box-shadow:inset 0 1px 2px rgba(0,0,0,.9);overflow:hidden}
-  .sl-fill{position:absolute;top:0;bottom:0;left:0;width:4%;border-radius:4px;background:linear-gradient(180deg,#5CFF9C,#00FF66 55%,#00C853);box-shadow:0 0 12px rgba(0,255,102,.7),0 0 30px rgba(0,255,102,.35);transition:width .3s ease-out}
-  .sl-spill{position:absolute;left:3px;top:100%;height:70px;width:4%;margin-top:-4px;background:radial-gradient(ellipse 60% 100% at 50% 0,rgba(0,255,102,.3),transparent 70%);filter:blur(10px);pointer-events:none;transition:width .3s ease-out}
+  .sl-fill{position:absolute;top:0;bottom:0;left:0;width:4%;border-radius:4px;background:linear-gradient(180deg,#5CFF9C,#00FF66 55%,#00C853);box-shadow:0 0 12px rgba(0,255,102,.7),0 0 30px rgba(0,255,102,.35)}
+  .sl-spill{position:absolute;left:3px;top:100%;height:70px;width:calc(100% - 6px);transform:scaleX(.04);transform-origin:left center;will-change:transform;margin-top:-4px;background:radial-gradient(ellipse 60% 100% at 50% 0,rgba(0,255,102,.3),transparent 70%);filter:blur(10px);pointer-events:none}
   .sl-pct{font:500 12px/1 var(--mono);color:#8A939C;min-width:3.2em;font-variant-numeric:tabular-nums}
   .sl-label{position:absolute;bottom:36px;left:0;right:0;text-align:center;font:500 10.5px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:#4E565D}
   @media (prefers-reduced-motion:reduce){.sl-fill,.sl-spill,.site-loader,.sl-head{transition:none}}
@@ -504,8 +504,9 @@
   let real = 0.04, shown = 0.04, complete = false, finished = false, last = t0;
   document.documentElement.classList.add('is-loading');
   const ease = (k) => 1 - Math.pow(1 - k, 2.2);
-  const paint = () => { const w = (shown * 100).toFixed(2) + '%'; fill.style.width = w; spill.style.width = w; pct.textContent = Math.round(shown * 100) + '%'; };
-  const finish = () => { finished = true; shown = 1; paint(); if (lbl) lbl.textContent = 'Ready'; setTimeout(() => { el.classList.add('out'); document.documentElement.classList.remove('is-loading'); setTimeout(() => el.remove(), 900); }, 260); };
+  const finishCbs = [];
+  const paint = () => { fill.style.width = (shown * 100).toFixed(2) + '%'; spill.style.transform = 'scaleX(' + shown.toFixed(4) + ')'; pct.textContent = Math.round(shown * 100) + '%'; };
+  const finish = () => { finished = true; shown = 1; paint(); if (lbl) lbl.textContent = 'Ready'; setTimeout(() => { el.classList.add('out'); document.documentElement.classList.remove('is-loading'); setTimeout(() => { el.remove(); finishCbs.splice(0).forEach(cb => { try { cb(); } catch (e) {} }); }, 900); }, 260); };
   const tick = (now) => {
     if (finished) return;
     const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
@@ -521,6 +522,7 @@
   window.__loading = {
     set(f, label) { if (finished) return; real = Math.max(real, f); if (label && lbl && !complete) lbl.textContent = label; },
     done() { complete = true; },
+    onFinish(cb) { if (finished && !document.getElementById('siteLoader')) cb(); else finishCbs.push(cb); },
     _debug: { tick, state: () => ({ shown, real, complete, finished, elapsed: performance.now() - t0 }) }
   };
   window.__loading.fail = window.__loading.done;
@@ -1412,7 +1414,7 @@ scheduleNitro();
     ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
   }
   let last = 0;
-  function frame(t) { if (t - last > 40) { draw(t); last = t; } requestAnimationFrame(frame); }
+  function frame(t) { if (t - last > 40 && !document.documentElement.classList.contains('is-loading')) { draw(t); last = t; } requestAnimationFrame(frame); }
   addEventListener('resize', size); size(); if (!reduced) requestAnimationFrame(frame);
 })();
 </script>
@@ -1478,15 +1480,18 @@ const ROLE = {
   'Vert_Material_0_1': neon, 'Vert_Material_0_2': neon, 'Vert_Material_0_25': neon, 'Vert_Material_0_6': neon, 'Vert_Material_0_10': neon,
 };
 const pumpLights = [];
+const needNormals = [];
 root.traverse(o => {
   if (!o.isMesh) return;
-  if (!o.geometry.getAttribute('normal')) o.geometry.computeVertexNormals();
+  if (!o.geometry.getAttribute('normal')) needNormals.push(o.geometry);
   const n = o.name || '';
   if (/^Cube_Pompe_lumi/.test(n)) { o.material = neon.clone(); o.material.name = 'pump_light'; pumpLights.push(o); }
   else if (ROLE[n]) o.material = ROLE[n];
   else o.material = carbon;
   o.castShadow = true; o.receiveShadow = true;
 });
+/* normals one mesh at a time, yielding between meshes so the loading bar keeps animating */
+for (let i = 0; i < needNormals.length; i++) { needNormals[i].computeVertexNormals(); setProgress(0.9 + 0.05 * (i / needNormals.length), 'Building scene'); await new Promise(r => setTimeout(r, 0)); }
 let modelLight = null;
 root.traverse(o => { if (o.isLight) { modelLight = o; o.visible = false; } });
 
@@ -1650,9 +1655,13 @@ function step(t) {
   exhaust.material.opacity = 0.1 + 0.55 * lvl;
   renderer.render(scene, camera);
 }
-requestAnimationFrame(frame);
-requestAnimationFrame(() => requestAnimationFrame(() => { if (window.__loading) window.__loading.done(); }));
-setTimeout(() => { if (window.__loading) window.__loading.done(); }, 1500);
+/* compile shaders without blocking where supported, draw the first frame for the fade-in, then let the loading screen finish; the loop starts once the overlay is gone */
+try { if (renderer.compileAsync) await renderer.compileAsync(scene, camera); } catch (e) {}
+step(performance.now());
+let loopStarted = false;
+const startLoop = () => { if (loopStarted) return; loopStarted = true; last = performance.now(); requestAnimationFrame(frame); };
+if (window.__loading && window.__loading.onFinish) { window.__loading.onFinish(startLoop); window.__loading.done(); } else startLoop();
+setTimeout(startLoop, 8000);
 window.__rig = {
   renderer, scene, camera, fit, step,
   update(s) {
