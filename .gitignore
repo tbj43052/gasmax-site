@@ -1,5 +1,4 @@
 # large source model and local render captures stay out of the repo
-assets/gasmax.glb
 assets/cap-*.png
 assets/view-*.png
 gasmax-site.zip
