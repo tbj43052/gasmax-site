@@ -1491,7 +1491,9 @@ root.traverse(o => {
   o.castShadow = true; o.receiveShadow = true;
 });
 /* normals one mesh at a time, yielding between meshes so the loading bar keeps animating */
-for (let i = 0; i < needNormals.length; i++) { needNormals[i].computeVertexNormals(); setProgress(0.9 + 0.05 * (i / needNormals.length), 'Building scene'); await new Promise(r => setTimeout(r, 0)); }
+const yieldNow = () => new Promise(r => { const ch = new MessageChannel(); ch.port1.onmessage = () => r(); ch.port2.postMessage(0); });
+let tSlice = performance.now();
+for (let i = 0; i < needNormals.length; i++) { needNormals[i].computeVertexNormals(); setProgress(0.9 + 0.05 * (i / needNormals.length), 'Building scene'); if (performance.now() - tSlice > 12) { await yieldNow(); tSlice = performance.now(); } }
 let modelLight = null;
 root.traverse(o => { if (o.isLight) { modelLight = o; o.visible = false; } });
 
