@@ -616,7 +616,7 @@
         </div>
       </div>
     </div>
-    <div class="ca ca-hero"><span>CA: <b>0x7a3…e1b5c (placeholder until launch)</b></span><button type="button" class="copyCa">Copy</button></div>
+    <div class="ca ca-hero"><span>CA: <b>drops at launch</b></span><button type="button" class="copyCa">Copy</button></div>
   </section>
 </div>
 
@@ -954,11 +954,9 @@
 <footer>
   <div class="wrap">
     <div class="foot-top">
-      <div class="ca"><span>CA · <b id="caShort">placeholder until launch</b></span><button type="button" class="copyCa">Copy</button></div>
+      <div class="ca"><span>CA · <b id="caShort">drops at launch</b></span><button type="button" class="copyCa">Copy</button></div>
       <nav class="foot-links" aria-label="Links">
-        <a href="#" data-todo="docs link">Docs</a>
         <a href="https://x.com/GasMaxEVM" target="_blank" rel="noopener">X</a>
-        <a href="#" data-todo="Telegram link">Telegram</a>
         <a href="#" data-todo="Dexscreener link">Dexscreener</a>
         <a href="#" data-todo="contract explorer link">Contract</a>
       </nav>
@@ -1273,13 +1271,34 @@ function buildTreasury() {
 buildTreasury();
 
 /* ---------- contract address + toast */
-const CA = '0x0000000000000000000000000000000000000000';
+/* ---------- LAUNCH CONFIG: paste the contract address into `ca` at launch; every link below derives from it */
+const LAUNCH = { ca: '', chain: 'base' };
+const CHAINS = {
+  base: { name: 'Base', explorer: 'https://basescan.org/token/', dex: 'https://dexscreener.com/base/', swap: 'https://app.uniswap.org/swap?chain=base&outputCurrency=' },
+  ethereum: { name: 'Ethereum', explorer: 'https://etherscan.io/token/', dex: 'https://dexscreener.com/ethereum/', swap: 'https://app.uniswap.org/swap?chain=mainnet&outputCurrency=' },
+};
+const CA = LAUNCH.ca;
+const LIVE = /^0x[0-9a-fA-F]{40}$/.test(CA);
+const CHAIN = CHAINS[LAUNCH.chain] || CHAINS.base;
 let toastT = null;
 function toast(msg) {
   let el = $('.toast'); if (!el) { el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); document.body.appendChild(el); }
   el.textContent = msg; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 1800);
 }
-$$('.copyCa').forEach(b => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(CA); } catch (e) {} toast('Placeholder address copied. Set the real contract before launch.'); }));
+$$('.ca b').forEach(b => { b.textContent = LIVE ? CA.slice(0, 6) + '…' + CA.slice(-4) : 'drops at launch'; });
+$$('.copyCa').forEach(b => b.addEventListener('click', async () => {
+  if (!LIVE) { toast('The contract address drops at launch. Follow @GasMaxEVM on X.'); return; }
+  try { await navigator.clipboard.writeText(CA); } catch (e) {}
+  toast('Contract address copied');
+}));
+const soon = (msg) => (e) => { e.preventDefault(); toast(msg); };
+$$('a[data-todo]').forEach(a => {
+  const t = a.dataset.todo || '';
+  const wire = (url, msg) => { if (LIVE) { a.href = url; a.target = '_blank'; a.rel = 'noopener'; } else a.addEventListener('click', soon(msg)); };
+  if (t.startsWith('link to DEX')) wire(CHAIN.swap + CA, 'Buying opens at launch. Follow @GasMaxEVM on X for the contract.');
+  else if (t === 'Dexscreener link') wire(CHAIN.dex + CA, 'The chart goes live with the contract at launch.');
+  else if (t === 'contract explorer link') wire(CHAIN.explorer + CA, 'The contract address drops at launch.');
+});
 
 /* ---------- wallet connect (EIP-1193: MetaMask, Rabby, Coinbase Wallet, etc.) */
 const walletBtn = $('#connectWallet');
