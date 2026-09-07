@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GASMAX — car & pump</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.184.0/build/three.module.js",
+    "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js",
+    "three/addons/exporters/OBJExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js",
+    "three/addons/exporters/GLTFExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js"
+  },
+  "integrity": {
+    "https://unpkg.com/three@0.184.0/build/three.module.js": "sha384-8FCZ1eVO6it4+pbec2aDtnTrwjWXZLJRC+MAGCIPDgsYnUrl/E0A2YlF8ioMKI/J",
+    "https://unpkg.com/three@0.184.0/build/three.core.js": "sha384-dw2ooPewaEIrAgl6oFDBmmBWCE9oW9LxRGcfwZ0hLvEprzo202wXl7vCYHRlSnOT",
+    "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js": "sha384-4rziNxOBZKQ69i+w+f89KJ55TCYquwchVbByQwmaOeIOXdOU2PLDn3kOfXHwIJC9",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js": "sha384-nbwtoZENJD3Vq+ACK0CuGQdPMuDWHkamC2KJD70EV5nfg6jQjfppKOea07YJN+N3",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js": "sha384-VofkvpG6HERhFCYbsUOHeNXBCqID2nfqkQqnVzE1jc/oPcz+qJ13ADdXH08hE+cQ"
+  }
+}
+</script>
+<style>
+  html,body{margin:0;height:100%;background:#050706}
+  three-d-stage:not(:defined){visibility:hidden}
+  three-d-stage{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<three-d-stage name="gasmax-car-and-pump" background="#050706" autorotate></three-d-stage>
+<script src="./three-d-stage.js"></script>
+<script type="module">
+const stage = document.querySelector('three-d-stage');
+const { THREE } = await stage.ready;
+
+const NEON = 0x00ff66;
+const M = {
+  carbon: new THREE.MeshPhysicalMaterial({ name:'carbon_satin', color:0x454c51, roughness:0.22, metalness:0.4, clearcoat:1, clearcoatRoughness:0.08 }),
+  carbonDark: new THREE.MeshPhysicalMaterial({ name:'carbon_matte', color:0x202426, roughness:0.5, metalness:0.35, clearcoat:0.5, clearcoatRoughness:0.3 }),
+  gunmetal: new THREE.MeshStandardMaterial({ name:'gunmetal', color:0x4c5359, roughness:0.22, metalness:0.9 }),
+  chrome: new THREE.MeshStandardMaterial({ name:'chrome', color:0xd6dadd, roughness:0.08, metalness:1 }),
+  rubber: new THREE.MeshStandardMaterial({ name:'tyre_rubber', color:0x0b0c0d, roughness:0.92, metalness:0 }),
+  rim: new THREE.MeshStandardMaterial({ name:'rim_dark_alloy', color:0x8b9297, roughness:0.2, metalness:0.95 }),
+  neon: new THREE.MeshStandardMaterial({ name:'neon_green', color:NEON, emissive:NEON, emissiveIntensity:2.2, roughness:0.2, metalness:0 }),
+  neonSoft: new THREE.MeshStandardMaterial({ name:'neon_soft', color:0x9fffc4, emissive:NEON, emissiveIntensity:0.9, roughness:0.3, metalness:0, transparent:true, opacity:0.55 }),
+  greenMetal: new THREE.MeshPhysicalMaterial({ name:'green_metallic', color:0x1f7a3a, roughness:0.25, metalness:0.8, clearcoat:0.8, clearcoatRoughness:0.15 }),
+  glass: new THREE.MeshPhysicalMaterial({ name:'glass_panel', color:0xcfffe0, transparent:true, opacity:0.18, roughness:0.02, metalness:0, transmission:0, clearcoat:1, depthWrite:false, side:THREE.DoubleSide }),
+  visor: new THREE.MeshPhysicalMaterial({ name:'visor', color:0x0d1a12, roughness:0.05, metalness:0.6, clearcoat:1 }),
+};
+const mesh = (g, m, name, p=[0,0,0], r=[0,0,0]) => {
+  const o = new THREE.Mesh(g, m); o.name = name;
+  o.position.set(...p); o.rotation.set(...r); o.castShadow = o.receiveShadow = true; return o;
+};
+const extrude = (pts, depth, bevel=0.03, seg=3) => {
+  const s = new THREE.Shape(); pts.forEach(([x,y],i)=> i?s.lineTo(x,y):s.moveTo(x,y)); s.closePath();
+  const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled:bevel>0, bevelThickness:bevel, bevelSize:bevel, bevelSegments:seg, curveSegments:12 });
+  g.translate(0,0,-depth/2); return g;
+};
+const tube = (pts, r, name, m=M.carbonDark, closed=false) =>
+  mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p))), 96, r, 14, closed), m, name);
+const wingProfile = (chord, thick, camber=0.35) => {
+  const s = new THREE.Shape();
+  s.moveTo(0,0); s.quadraticCurveTo(chord*0.3, thick*1.2, chord, thick*camber);
+  s.quadraticCurveTo(chord*0.5, -thick*0.2, 0, 0);
+  return s;
+};
+const wing = (span, chord, thick, name, m=M.carbon, camber=0.35) => {
+  const g = new THREE.ExtrudeGeometry(wingProfile(chord,thick,camber), { depth:span, bevelEnabled:false, curveSegments:10 });
+  g.translate(-chord/2, 0, -span/2); return mesh(g, m, name);
+};
+
+// ================= CAR =================
+const car = new THREE.Group(); car.name = 'f1_car';
+const R_TY = 0.36, W_FR = 0.34, W_RR = 0.42, TRACK = 0.8;
+{
+  // --- monocoque: lofted via lathe-like taper (ExtrudeGeometry top-view, plus a rounded upper) ---
+  const tubTop = extrude([[-1.7,-0.26],[0.0,-0.24],[1.3,-0.18],[2.7,-0.09],[3.0,-0.06],[3.0,0.06],[2.7,0.09],[1.3,0.18],[0.0,0.24],[-1.7,0.26]], 0.40, 0.06, 4);
+  tubTop.rotateX(Math.PI/2);
+  car.add(mesh(tubTop, M.carbon, 'monocoque', [0,0.40+0.2,0]));
+  // upper cockpit shell
+  const upper = extrude([[-1.5,0],[-0.2,0],[0.9,0],[1.35,0.08],[1.0,0.22],[0.2,0.3],[-0.6,0.3],[-1.5,0.12]], 0.5, 0.05, 4);
+  car.add(mesh(upper, M.carbon, 'cockpit_shell', [0.2,0.8,0]));
+  // cockpit opening & seat
+  car.add(mesh(new THREE.BoxGeometry(0.75,0.18,0.42), M.carbonDark, 'cockpit_opening', [0.45,0.93,0]));
+  car.add(mesh(new THREE.BoxGeometry(0.5,0.12,0.36), M.carbonDark, 'seat', [0.25,0.88,0]));
+  // driver helmet
+  car.add(mesh(new THREE.SphereGeometry(0.16,32,24), M.greenMetal, 'helmet', [0.15,1.1,0]));
+  car.add(mesh(new THREE.SphereGeometry(0.165,32,16,-0.4,1.6,0.9,0.8), M.visor, 'visor', [0.15,1.1,0],[0,-Math.PI/2,0]));
+  // halo
+  const haloPts = [[0.62,0.98,0],[0.5,1.16,-0.22],[0.2,1.24,-0.36],[-0.2,1.24,-0.36],[-0.4,1.22,-0.2],[-0.42,1.22,0],[-0.4,1.22,0.2],[-0.2,1.24,0.36],[0.2,1.24,0.36],[0.5,1.16,0.22],[0.62,0.98,0]];
+  car.add(tube(haloPts, 0.035, 'halo', M.carbon));
+  car.add(tube([[0.62,0.98,0],[0.72,1.1,0],[0.6,1.22,0],[0.2,1.24,0]], 0.03, 'halo_strut', M.carbon));
+  // airbox + engine cover spine
+  const ac = extrude([[-1.85,0],[-0.5,0],[-0.25,0.35],[-0.3,0.55],[-0.55,0.62],[-1.2,0.4],[-1.85,0.12]], 0.36, 0.05, 4);
+  car.add(mesh(ac, M.carbon, 'engine_cover', [-0.1,0.86,0]));
+  car.add(mesh(new THREE.CylinderGeometry(0.11,0.14,0.34,24), M.carbonDark, 'airbox_intake', [-0.42,1.35,0],[0,0,Math.PI/2]));
+  car.add(mesh(new THREE.BoxGeometry(0.02,0.5,0.7), M.carbon, 'shark_fin', [-1.5,1.15,0]));
+  car.add(mesh(new THREE.BoxGeometry(0.9,0.02,0.01), M.neon, 'spine_light', [-0.9,1.31,0],[0,0,0.26]));
+  // sidepods (undercut shape, extruded along x)
+  for (const s of [-1,1]) {
+    const side = s>0?'L':'R';
+    const spg = extrude([[-1.6,0.02],[0.55,0.02],[0.58,0.42],[0.2,0.5],[-0.5,0.46],[-1.2,0.3],[-1.6,0.1]], 0.5, 0.06, 4);
+    car.add(mesh(spg, M.carbon, `sidepod_${side}`, [0.05,0.42,s*0.6]));
+    // inlet
+    car.add(mesh(new THREE.BoxGeometry(0.06,0.3,0.46), M.carbonDark, `sidepod_inlet_${side}`, [0.64,0.7,s*0.6]));
+    car.add(mesh(new THREE.BoxGeometry(0.02,0.32,0.02), M.neon, `inlet_light_${side}`, [0.67,0.7,s*(0.6+0.23)]));
+    // razor livery lines
+    car.add(tube([[0.55,0.9,s*0.86],[-0.3,0.86,s*0.88],[-1.2,0.72,s*0.82],[-1.7,0.55,s*0.6]], 0.008, `livery_line_${side}`, M.neon));
+    car.add(tube([[0.5,0.52,s*0.88],[-0.6,0.5,s*0.9],[-1.5,0.47,s*0.7]], 0.006, `livery_line_low_${side}`, M.neon));
+    // mirrors
+    car.add(mesh(new THREE.CylinderGeometry(0.012,0.012,0.16,8), M.carbonDark, `mirror_stalk_${side}`, [0.85,1.0,s*0.42],[0,0,s*0.5]));
+    car.add(mesh(new THREE.BoxGeometry(0.06,0.07,0.12), M.carbon, `mirror_${side}`, [0.86,1.07,s*0.5]));
+    // bargeboard / floor edge wing
+    car.add(mesh(new THREE.BoxGeometry(0.5,0.16,0.02), M.carbon, `bargeboard_${side}`, [0.95,0.5,s*0.7],[0,s*0.15,0]));
+    car.add(mesh(new THREE.BoxGeometry(2.6,0.015,0.05), M.neon, `floor_edge_light_${side}`, [-0.4,0.38,s*0.98]));
+  }
+  // floor + undertray lighting
+  car.add(mesh(extrude([[-2.2,-0.75],[1.3,-0.98],[1.5,-0.55],[1.5,0.55],[1.3,0.98],[-2.2,0.75]], 0.04, 0.01, 2).rotateX(Math.PI/2), M.carbonDark, 'floor', [-0.3,0.37,0]));
+  car.add(mesh(new THREE.PlaneGeometry(3.4,1.4), M.neonSoft, 'undertray_glow', [-0.35,0.34,0],[Math.PI/2,0,0]));
+  // diffuser
+  for (const z of [-0.5,-0.25,0,0.25,0.5]) car.add(mesh(new THREE.BoxGeometry(0.5,0.22,0.015), M.carbon, `diffuser_strake_${z}`, [-2.25,0.48,z],[0,0,0]));
+  car.add(mesh(new THREE.BoxGeometry(0.5,0.02,1.05), M.carbon, 'diffuser_roof', [-2.25,0.6,0],[0,0,0.25]));
+  // nose (tapered lathe)
+  const nosePts = [];
+  for (let i=0;i<=14;i++){ const t=i/14; nosePts.push(new THREE.Vector2(0.03+0.17*Math.pow(1-t,0.6), t*1.05)); }
+  const noseG = new THREE.LatheGeometry(nosePts, 32); noseG.rotateZ(-Math.PI/2);
+  car.add(mesh(noseG, M.carbon, 'nose', [2.98,0.5,0]));
+  car.add(mesh(new THREE.SphereGeometry(0.035,16,12), M.neon, 'nose_tip_light', [4.06,0.5,0]));
+  // front wing (3 elements + endplates)
+  const fw1 = wing(1.95,0.36,0.06,'front_wing_main'); fw1.position.set(4.05,0.18,0); fw1.rotation.z = 0.06; car.add(fw1);
+  const fw2 = wing(1.95,0.28,0.04,'front_wing_flap_1'); fw2.position.set(3.9,0.25,0); fw2.rotation.z = 0.3; car.add(fw2);
+  const fw3 = wing(1.6,0.2,0.03,'front_wing_flap_2'); fw3.position.set(3.78,0.33,0); fw3.rotation.z = 0.55; car.add(fw3);
+  car.add(mesh(new THREE.BoxGeometry(1.9,0.008,0.012), M.neon, 'front_wing_light', [4.2,0.2,0]));
+  for (const s of [-1,1]) {
+    const side = s>0?'L':'R';
+    car.add(mesh(extrude([[0,0],[0.62,0.02],[0.66,0.28],[0.35,0.34],[0.05,0.24]], 0.015, 0.005, 1), M.carbon, `front_endplate_${side}`, [3.75,0.14,s*0.98]));
+    car.add(mesh(new THREE.BoxGeometry(0.4,0.01,0.01), M.neon, `front_endplate_light_${side}`, [4.05,0.44,s*0.99]));
+    car.add(mesh(new THREE.BoxGeometry(0.1,0.3,0.05), M.carbon, `nose_pylon_${side}`, [3.85,0.34,s*0.12]));
+  }
+  // rear wing
+  const rw1 = wing(1.0,0.4,0.06,'rear_wing_main'); rw1.position.set(-2.55,1.0,0); rw1.rotation.z = -0.12; car.add(rw1);
+  const rw2 = wing(1.0,0.28,0.04,'rear_wing_drs_flap'); rw2.position.set(-2.72,1.14,0); rw2.rotation.z = -0.5; car.add(rw2);
+  car.add(mesh(new THREE.BoxGeometry(0.02,0.01,1.0), M.neon, 'rear_wing_light', [-2.35,1.02,0]));
+  const bw = wing(1.0,0.32,0.05,'beam_wing'); bw.position.set(-2.4,0.66,0); bw.rotation.z = -0.3; car.add(bw);
+  for (const s of [-1,1]) {
+    const side = s>0?'L':'R';
+    car.add(mesh(extrude([[0,0],[0.75,0],[0.8,0.55],[0.3,0.62],[-0.05,0.5]], 0.015, 0.005, 1), M.carbon, `rear_endplate_${side}`, [-2.9,0.66,s*0.52]));
+    car.add(mesh(new THREE.BoxGeometry(0.7,0.01,0.01), M.neon, `rear_endplate_light_${side}`, [-2.55,0.7,s*0.53]));
+  }
+  car.add(mesh(new THREE.BoxGeometry(0.04,0.42,0.06), M.carbon, 'rear_wing_pylon', [-2.45,0.83,0]));
+  car.add(mesh(new THREE.CylinderGeometry(0.03,0.03,0.08,12), M.neon, 'rain_light', [-2.55,0.62,0],[0,0,Math.PI/2]));
+  // gearbox / exhaust
+  car.add(mesh(new THREE.BoxGeometry(0.8,0.26,0.28), M.carbonDark, 'gearbox', [-1.95,0.6,0]));
+  car.add(mesh(new THREE.CylinderGeometry(0.045,0.05,0.5,16), M.chrome, 'exhaust', [-2.05,0.8,0],[0,0,Math.PI/2]));
+}
+// wheels + suspension
+for (const [x, tag, W] of [[2.15,'front',W_FR],[-1.6,'rear',W_RR]]) {
+  for (const s of [-1,1]) {
+    const side = s>0?'L':'R';
+    const wg = new THREE.Group(); wg.name = `wheel_${tag}_${side}`;
+    // tyre with rounded shoulder (lathe)
+    const tp = [];
+    for (let i=0;i<=16;i++){ const t=i/16; const a=t*Math.PI; tp.push(new THREE.Vector2(0.235 + (R_TY-0.235)*Math.sin(a)*0.98 + (t>0&&t<1?0:0.001), (t-0.5)*W)); }
+    tp.unshift(new THREE.Vector2(0.235,-W/2)); tp.push(new THREE.Vector2(0.235,W/2));
+    const tyreG = new THREE.LatheGeometry(tp, 56); tyreG.rotateX(Math.PI/2);
+    wg.add(mesh(tyreG, M.rubber, `tyre_${tag}_${side}`));
+    // tread band shine line
+    wg.add(mesh(new THREE.TorusGeometry(R_TY-0.002,0.006,8,64), M.carbonDark, `tyre_band_${tag}_${side}`));
+    // rim + spokes
+    wg.add(mesh(new THREE.CylinderGeometry(0.235,0.235,W-0.02,48,1,true), M.rim, `rim_barrel_${tag}_${side}`, [0,0,0],[Math.PI/2,0,0]));
+    wg.add(mesh(new THREE.CylinderGeometry(0.235,0.225,0.02,48), M.rim, `rim_lip_${tag}_${side}`, [0,0,s*W/2],[Math.PI/2,0,0]));
+    wg.add(mesh(new THREE.CylinderGeometry(0.2,0.2,0.02,48), M.carbonDark, `rim_dish_${tag}_${side}`, [0,0,s*(W/2-0.06)],[Math.PI/2,0,0]));
+    for (let k=0;k<10;k++){ const a=k/10*Math.PI*2; wg.add(mesh(new THREE.BoxGeometry(0.03,0.2,0.03), M.rim, `spoke_${tag}_${side}_${k}`, [Math.cos(a)*0.12,Math.sin(a)*0.12,s*(W/2-0.05)],[0,0,a+Math.PI/2])); }
+    wg.add(mesh(new THREE.CylinderGeometry(0.06,0.06,0.05,24), M.chrome, `hub_nut_${tag}_${side}`, [0,0,s*(W/2-0.03)],[Math.PI/2,0,0]));
+    wg.add(mesh(new THREE.TorusGeometry(0.228,0.006,8,64), M.neon, `rim_glow_${tag}_${side}`, [0,0,s*(W/2+0.002)]));
+    // brake disc inside
+    wg.add(mesh(new THREE.CylinderGeometry(0.19,0.19,0.03,40), M.gunmetal, `brake_disc_${tag}_${side}`, [0,0,-s*0.02],[Math.PI/2,0,0]));
+    wg.position.set(x, R_TY, s*TRACK);
+    car.add(wg);
+    // wishbones (aero-profiled) + pushrod
+    const inner = s*0.25, outer = s*(TRACK-W/2-0.01);
+    for (const [dy, nm] of [[0.14,'upper'],[-0.16,'lower']]) {
+      for (const [dx, sfx] of [[0.14,'front'],[-0.16,'rear']]) {
+        const a = new THREE.Vector3(x+dx, R_TY+dy+0.02, inner), b = new THREE.Vector3(x, R_TY+dy, outer);
+        const len = a.distanceTo(b), mid = a.clone().add(b).multiplyScalar(0.5);
+        const arm = mesh(new THREE.BoxGeometry(0.07,0.02,len), M.carbon, `wishbone_${nm}_${sfx}_${tag}_${side}`);
+        arm.position.copy(mid); arm.lookAt(b); car.add(arm);
+      }
+    }
+    car.add(tube([[x+0.05,R_TY-0.1,outer],[x+0.05,R_TY+0.28,inner]], 0.012, `pushrod_${tag}_${side}`, M.gunmetal));
+    car.add(mesh(new THREE.BoxGeometry(0.1,0.32,0.04), M.carbonDark, `upright_${tag}_${side}`, [x, R_TY, outer]));
+  }
+}
+car.position.set(1.1, 0, 0.1);
+
+// ================= PUMP =================
+const pump = new THREE.Group(); pump.name = 'gasmax_pump';
+{
+  const PW = 1.0, PD = 0.72, H_LOW = 0.9, H_GLASS = 1.5, H_TOP = 0.32;
+  const yGlass0 = 0.14 + H_LOW, yGlass = yGlass0 + H_GLASS/2, yTop = yGlass0 + H_GLASS;
+  const box = (w,h,d,r) => { const g = extrude([[-w/2,-h/2],[w/2,-h/2],[w/2,h/2],[-w/2,h/2]], d, r, 3); return g; };
+  // plinth + lower housing (chamfered)
+  pump.add(mesh(box(PW+0.3,0.14,PD+0.3,0.02), M.carbonDark, 'pump_plinth', [0,0.07,0]));
+  pump.add(mesh(new THREE.BoxGeometry(PW+0.34,0.01,PD+0.34), M.neon, 'pump_plinth_light', [0,0.015,0]));
+  pump.add(mesh(box(PW,H_LOW,PD,0.04), M.greenMetal, 'pump_lower_housing', [0,0.14+H_LOW/2,0]));
+  // front display + keypad
+  pump.add(mesh(new THREE.BoxGeometry(PW*0.62,0.26,0.01), M.visor, 'pump_display', [0,0.78,PD/2+0.005]));
+  pump.add(mesh(new THREE.BoxGeometry(PW*0.56,0.02,0.012), M.neon, 'pump_display_readout', [0,0.84,PD/2+0.006]));
+  pump.add(mesh(new THREE.BoxGeometry(PW*0.3,0.008,0.012), M.neon, 'pump_display_readout_2', [-0.13,0.76,PD/2+0.006]));
+  for (let i=0;i<3;i++) for (let j=0;j<3;j++) pump.add(mesh(new THREE.BoxGeometry(0.07,0.05,0.015), M.gunmetal, `keypad_${i}${j}`, [-0.12+j*0.12, 0.55-i*0.08, PD/2+0.006]));
+  pump.add(mesh(new THREE.BoxGeometry(0.34,0.1,0.02), M.carbonDark, 'card_slot', [0.24,0.5,PD/2+0.006]));
+  // GASMAX lightning badge
+  pump.add(mesh(extrude([[-0.03,0.09],[0.02,0.09],[-0.01,0.015],[0.04,0.015],[-0.03,-0.09],[-0.005,-0.02],[-0.045,-0.02]], 0.01, 0, 1), M.neon, 'pump_badge_bolt', [0,0.28,PD/2+0.01]));
+  // glass chamber (4 panes + corner pillars + frame rails)
+  for (const [w,d,px,pz,ry,nm] of [[PW*0.86,0,0,PD/2,0,'front'],[PW*0.86,0,0,-PD/2,0,'back'],[PD*0.86,0,PW/2,0,Math.PI/2,'right'],[PD*0.86,0,-PW/2,0,Math.PI/2,'left']])
+    pump.add(mesh(new THREE.PlaneGeometry(w,H_GLASS), M.glass, `glass_${nm}`, [px,yGlass,pz],[0,ry,0]));
+  for (const cx of [-1,1]) for (const cz of [-1,1])
+    pump.add(mesh(new THREE.BoxGeometry(0.08,H_GLASS,0.08), M.gunmetal, `glass_pillar_${cx>0?'R':'L'}${cz>0?'F':'B'}`, [cx*PW/2, yGlass, cz*PD/2]));
+  for (const y of [yGlass0+0.03, yTop-0.03]) {
+    pump.add(mesh(new THREE.BoxGeometry(PW+0.04,0.05,0.05), M.gunmetal, `frame_rail_f_${y.toFixed(1)}`, [0,y,PD/2]));
+    pump.add(mesh(new THREE.BoxGeometry(PW+0.04,0.05,0.05), M.gunmetal, `frame_rail_b_${y.toFixed(1)}`, [0,y,-PD/2]));
+  }
+  // inner floor / ceiling with neon rings
+  pump.add(mesh(new THREE.BoxGeometry(PW*0.9,0.03,PD*0.9), M.carbonDark, 'chamber_floor', [0,yGlass0+0.015,0]));
+  pump.add(mesh(new THREE.TorusGeometry(0.22,0.012,10,64), M.neon, 'chamber_floor_ring', [0,yGlass0+0.035,0],[Math.PI/2,0,0]));
+  pump.add(mesh(new THREE.TorusGeometry(0.22,0.012,10,64), M.neon, 'chamber_ceiling_ring', [0,yTop-0.035,0],[Math.PI/2,0,0]));
+  // double helix
+  const helix = (phase, name) => {
+    const pts = []; for (let i=0;i<=240;i++){ const t=i/240, a=t*Math.PI*5+phase; pts.push(new THREE.Vector3(Math.cos(a)*0.2, yGlass0+0.08+t*(H_GLASS-0.16), Math.sin(a)*0.2)); }
+    pump.add(mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 260, 0.022, 12, false), M.neon, name));
+  };
+  helix(0,'helix_strand_a'); helix(Math.PI,'helix_strand_b');
+  for (let i=0;i<14;i++){ const t=(i+0.5)/14, a=t*Math.PI*5, y=yGlass0+0.08+t*(H_GLASS-0.16);
+    const rung = mesh(new THREE.CylinderGeometry(0.008,0.008,0.4,8), M.neonSoft, `helix_rung_${i}`, [0,y,0],[0,0,Math.PI/2]);
+    rung.rotation.y = -a; pump.add(rung); }
+  pump.add(mesh(new THREE.CylinderGeometry(0.02,0.02,H_GLASS-0.1,12), M.chrome, 'helix_axis', [0,yGlass,0]));
+  // top housing
+  pump.add(mesh(box(PW,H_TOP,PD,0.04), M.greenMetal, 'pump_top_housing', [0,yTop+H_TOP/2,0]));
+  pump.add(mesh(new THREE.BoxGeometry(PW*0.7,0.02,0.012), M.neon, 'top_logo_bar', [0,yTop+H_TOP/2,PD/2+0.006]));
+  pump.add(mesh(box(PW+0.12,0.05,PD+0.12,0.015), M.carbonDark, 'pump_cap', [0,yTop+H_TOP+0.025,0]));
+  pump.add(mesh(new THREE.BoxGeometry(PW+0.14,0.008,PD+0.14), M.neon, 'pump_cap_light', [0,yTop+H_TOP+0.002,0]));
+  // nozzles + hoses (both sides)
+  for (const s of [-1,1]) {
+    const side = s>0?'R':'L';
+    const hx = s*(PW/2+0.06);
+    pump.add(mesh(box(0.12,0.62,0.26,0.01), M.carbonDark, `nozzle_holster_${side}`, [hx,1.75,0]));
+    pump.add(mesh(new THREE.BoxGeometry(0.13,0.02,0.02), M.neon, `holster_light_${side}`, [hx,2.05,0.12]));
+    // nozzle: body, handle, spout
+    pump.add(mesh(new THREE.BoxGeometry(0.09,0.2,0.1), M.greenMetal, `nozzle_body_${side}`, [s*(PW/2+0.14),1.98,0.02]));
+    pump.add(mesh(new THREE.BoxGeometry(0.03,0.16,0.06), M.gunmetal, `nozzle_trigger_${side}`, [s*(PW/2+0.19),1.84,0.02]));
+    pump.add(mesh(new THREE.CylinderGeometry(0.02,0.025,0.3,14), M.chrome, `nozzle_spout_${side}`, [s*(PW/2+0.15),2.2,-0.04],[0.35,0,0]));
+    pump.add(mesh(new THREE.CylinderGeometry(0.04,0.04,0.1,14), M.carbonDark, `hose_collar_${side}`, [s*(PW/2+0.14),1.86,0.02]));
+    pump.add(tube([[s*(PW/2+0.14),1.82,0.02],[s*(PW/2+0.36),1.3,0.06],[s*(PW/2+0.38),0.7,0.12],[s*(PW/2+0.2),0.22,0.38]], 0.032, `hose_${side}`, M.carbonDark));
+    pump.add(mesh(new THREE.CylinderGeometry(0.05,0.05,0.12,14), M.gunmetal, `hose_inlet_${side}`, [s*(PW/2+0.02),0.3,0.38],[0,0,Math.PI/2]));
+  }
+  // feed hose to the car
+  pump.add(tube([[PW/2+0.2,0.22,0.38],[1.0,0.06,0.55],[1.7,0.04,0.45],[2.3,0.06,0.25],[2.6,0.2,0.1]], 0.032, 'feed_hose', M.carbonDark));
+  pump.add(mesh(new THREE.CylinderGeometry(0.045,0.045,0.14,14), M.chrome, 'feed_coupler', [2.65,0.24,0.08],[0,0,Math.PI/2]));
+}
+pump.position.set(-3.2, 0, -0.9);
+
+const model = new THREE.Group(); model.name = 'gasmax_scene';
+model.add(pump, car);
+const bb = new THREE.Box3().setFromObject(model); const c = bb.getCenter(new THREE.Vector3());
+model.position.set(-c.x, 0, -c.z);
+stage.setObject(model);
+</script>
+</body>
+</html>

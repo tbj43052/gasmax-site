@@ -1,0 +1,74 @@
+<!doctype html><meta charset="utf-8"><title>simplify model</title>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/"}}</script>
+<style>body{background:#111;color:#eee;font:12px/1.4 monospace;margin:0}#out{padding:8px;white-space:pre-wrap}</style>
+<body><pre id="out">working…</pre>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { MeshoptSimplifier } from 'https://cdn.jsdelivr.net/npm/meshoptimizer@0.22.0/meshopt_simplifier.module.js';
+const out = document.getElementById('out'); const log = (s) => { out.textContent += s + '\n'; };
+out.textContent = '';
+try {
+  await MeshoptSimplifier.ready;
+  const draco = new DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+  const loader = new GLTFLoader(); loader.setDRACOLoader(draco);
+  const gltf = await loader.loadAsync('/gasmax/assets/gasmax.glb');
+  const root = gltf.scene; root.updateMatrixWorld(true);
+  const meshes = []; root.traverse(o => { if (o.isMesh) meshes.push(o); });
+  let before = 0, after = 0;
+  const t0 = performance.now();
+  meshes.forEach((o, mi) => {
+    const g = o.geometry; const pa = g.attributes.position.array; const vc = g.attributes.position.count;
+    const srcIdx = g.index ? g.index.array : Uint32Array.from({ length: vc }, (_, i) => i);
+    const tris = srcIdx.length / 3; before += tris;
+    const keyMap = new Map(); const remapW = new Uint32Array(vc); const wpos = []; let wn = 0;
+    for (let v = 0; v < vc; v++) { const x = pa[v * 3], y = pa[v * 3 + 1], z = pa[v * 3 + 2]; const k = Math.round(x * 2e4) + ',' + Math.round(y * 2e4) + ',' + Math.round(z * 2e4); let id = keyMap.get(k); if (id === undefined) { id = wn++; keyMap.set(k, id); wpos.push(x, y, z); } remapW[v] = id; }
+    const idx32 = new Uint32Array(srcIdx.length); for (let i = 0; i < srcIdx.length; i++) idx32[i] = remapW[srcIdx[i]];
+    const pos = Float32Array.from(wpos);
+    let target = tris; if (tris > 20000) target = Math.min(8000, Math.max(500, Math.round(tris * 0.03)));
+    let newIdx = idx32, err = 0;
+    if (target < tris) { [newIdx, err] = MeshoptSimplifier.simplify(idx32, pos, 3, target * 3, 0.4, []); }
+    const remap = new Int32Array(wn).fill(-1); let n = 0; const outIdx = new Uint32Array(newIdx.length);
+    for (let i = 0; i < newIdx.length; i++) { const v = newIdx[i]; if (remap[v] < 0) remap[v] = n++; outIdx[i] = remap[v]; }
+    const outPos = new Float32Array(n * 3); for (let v = 0; v < wn; v++) { const r = remap[v]; if (r >= 0) { outPos[r * 3] = pos[v * 3]; outPos[r * 3 + 1] = pos[v * 3 + 1]; outPos[r * 3 + 2] = pos[v * 3 + 2]; } }
+    const ng = new THREE.BufferGeometry(); ng.setAttribute('position', new THREE.BufferAttribute(outPos, 3)); ng.setIndex(new THREE.BufferAttribute(n < 65536 ? Uint16Array.from(outIdx) : outIdx, 1)); ng.computeVertexNormals();
+    o.geometry = ng; after += outIdx.length / 3;
+    log('#' + mi + ' ' + o.name + ': ' + tris + ' -> ' + (outIdx.length / 3) + ' tris err ' + err.toFixed(4));
+  });
+  log('total ' + before + ' -> ' + after + ' tris in ' + Math.round(performance.now() - t0) + ' ms');
+  const bbAll = new THREE.Box3().setFromObject(root); const size = bbAll.getSize(new THREE.Vector3()), ctr = bbAll.getCenter(new THREE.Vector3());
+  const W = 1200, H = 480;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); renderer.setSize(W, H); renderer.setClearColor(0x1a1a1a);
+  const scene = new THREE.Scene(); scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2)); const dl = new THREE.DirectionalLight(0xffffff, 1.5); dl.position.set(2, 5, 4); scene.add(dl);
+  meshes.forEach((o, i) => { o.material = new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL((i * 0.37) % 1, 0.85, 0.5), roughness: 0.6 }); });
+  scene.add(root);
+  const shots = [];
+  const shoot = (label, file, camPos, upv, ortho) => {
+    let cam;
+    if (ortho) { cam = new THREE.OrthographicCamera(-size.x * 0.56, size.x * 0.56, size.x * 0.56 * H / W, -size.x * 0.56 * H / W, 0.01, 100); }
+    else { cam = new THREE.PerspectiveCamera(30, W / H, 0.01, 100); }
+    cam.position.copy(ctr).add(camPos); cam.up.copy(upv); cam.lookAt(ctr); cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+    renderer.render(scene, cam);
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const ctx = c.getContext('2d'); ctx.drawImage(renderer.domElement, 0, 0);
+    ctx.font = 'bold 14px monospace'; ctx.textBaseline = 'middle';
+    meshes.forEach((o, i) => { const b = new THREE.Box3().setFromObject(o); const p = b.getCenter(new THREE.Vector3()).project(cam); const x = (p.x + 1) / 2 * W, y = (1 - p.y) / 2 * H; ctx.fillStyle = '#' + o.material.color.getHexString(); ctx.fillRect(x - 3, y - 9, 26, 18); ctx.fillStyle = '#000'; ctx.fillText(String(i), x, y); });
+    ctx.fillStyle = '#fff'; ctx.fillText(label, 10, 14);
+    shots.push(new Promise(r => c.toBlob(b => fetch('/upload?name=' + file, { method: 'POST', body: b }).then(() => r()), 'image/png')));
+  };
+  shoot('side view from +z (x right, y up)', 'view-side.png', new THREE.Vector3(0, 0, 10), new THREE.Vector3(0, 1, 0), true);
+  shoot('top view (x right, z down)', 'view-top.png', new THREE.Vector3(0, 10, 0), new THREE.Vector3(0, 0, -1), true);
+  shoot('3/4 view from +x +y +z', 'view-persp.png', new THREE.Vector3(6, 3.5, 7), new THREE.Vector3(0, 1, 0), false);
+  await Promise.all(shots);
+  log('views uploaded');
+  meshes.forEach(o => { o.material = new THREE.MeshStandardMaterial({ color: 0xffffff, name: o.material.name }); });
+  meshes.forEach(o => o.geometry.deleteAttribute('normal'));
+  const exporter = new GLTFExporter();
+  const buf = await exporter.parseAsync(root, { binary: true, onlyVisible: false });
+  log('exported bytes: ' + buf.byteLength);
+  const res = await fetch('/upload?name=gasmax-lite.glb', { method: 'POST', body: buf });
+  log('upload: ' + res.status + ' ' + await res.text());
+  log('DONE');
+} catch (e) { log('ERROR: ' + (e && (e.stack || e.message || e))); }
+</script>
