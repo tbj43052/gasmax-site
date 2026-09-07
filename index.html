@@ -1636,6 +1636,7 @@ function step(t) {
 }
 requestAnimationFrame(frame);
 requestAnimationFrame(() => requestAnimationFrame(() => { if (window.__loading) window.__loading.done(); }));
+setTimeout(() => { if (window.__loading) window.__loading.done(); }, 1500);
 window.__rig = {
   renderer, scene, camera, fit, step,
   update(s) {
