@@ -1,5 +1,4 @@
-  setProgress(0.6, 'Decoding model');
-  const b64 = (document.getElementById('gasmaxModel') || {}).textContent || '';<title>$GASMAX Pit Stop</title>
+<title>$GASMAX Pit Stop</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="$GASMAX: a racing-themed memecoin whose flat 2% tax is routed back to traders, holders, stakers, the burn and locked liquidity. Nothing to a dev wallet.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1373,6 +1372,7 @@ async function loadModel() {
     try { return await loadUrl('assets/gasmax-lite.glb'); } catch (e) { console.warn('GASMAX: local copy unavailable, using the embedded copy'); }
   }
   /* 3. the slim copy embedded in the page (no network, no Draco needed) */
+  setProgress(0.6, 'Decoding model');
   const b64 = (document.getElementById('gasmaxModel') || {}).textContent || '';
   const bin = atob(b64.trim());
   const bytes = new Uint8Array(bin.length);
