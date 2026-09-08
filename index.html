@@ -22,8 +22,9 @@
   html{background:var(--ground)}
   body{margin:0;background:transparent;position:relative;color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
   [hidden]{display:none!important}
-  /* ---------- full-page loading screen */
-  .site-loader{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:36px;background-color:#0A0A0C;background-image:radial-gradient(ellipse 70% 45% at 50% 26%,rgba(255,255,255,.045),transparent 70%),radial-gradient(ellipse 42% 22% at 50% 64%,rgba(0,255,102,.05),transparent 70%),radial-gradient(circle at 50% 50%,rgba(255,255,255,.035) 0 .8px,transparent 1.4px),radial-gradient(circle at 0 0,rgba(255,255,255,.028) 0 .8px,transparent 1.4px);background-size:100% 100%,100% 100%,6px 6px,6px 6px;background-position:0 0,0 0,0 0,3px 3px;transition:opacity .7s ease,visibility .7s;will-change:opacity;font-family:var(--body)}
+  /* ---------- full-page loading screen: bar, glow and counter run as CSS animations on one fixed clock */
+  @property --slp{syntax:'<integer>';inherits:false;initial-value:1}
+  .site-loader{--sl-dur:3s;position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:36px;background-color:#0A0A0C;background-image:radial-gradient(ellipse 70% 45% at 50% 26%,rgba(255,255,255,.045),transparent 70%),radial-gradient(ellipse 42% 22% at 50% 64%,rgba(0,255,102,.05),transparent 70%),radial-gradient(circle at 50% 50%,rgba(255,255,255,.035) 0 .8px,transparent 1.4px),radial-gradient(circle at 0 0,rgba(255,255,255,.028) 0 .8px,transparent 1.4px);background-size:100% 100%,100% 100%,6px 6px,6px 6px;background-position:0 0,0 0,0 0,3px 3px;transition:opacity .7s ease,visibility .7s;will-change:opacity;font-family:var(--body)}
   .site-loader.out{opacity:0;visibility:hidden;pointer-events:none}
   html.is-loading{overflow:hidden}
   .sl-head{display:flex;flex-direction:column;align-items:center;gap:14px;opacity:0;transition:opacity .5s ease}
@@ -33,11 +34,15 @@
   .sl-row{display:flex;align-items:center;gap:16px}
   .sl-frame{position:relative;width:min(340px,62vw);padding:3px;border-radius:7px;background:linear-gradient(180deg,#2b2f34,#15181b);box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 -1px 0 rgba(0,0,0,.7),0 1px 0 rgba(255,255,255,.04),0 6px 18px rgba(0,0,0,.6)}
   .sl-track{position:relative;height:6px;border-radius:4px;background:#0b0d0f;box-shadow:inset 0 1px 2px rgba(0,0,0,.9);overflow:hidden}
-  .sl-fill{position:absolute;top:0;bottom:0;left:0;width:4%;border-radius:4px;background:linear-gradient(180deg,#5CFF9C,#00FF66 55%,#00C853);box-shadow:0 0 12px rgba(0,255,102,.7),0 0 30px rgba(0,255,102,.35)}
-  .sl-spill{position:absolute;left:3px;top:100%;height:70px;width:calc(100% - 6px);transform:scaleX(.04);transform-origin:left center;will-change:transform;margin-top:-4px;background:radial-gradient(ellipse 60% 100% at 50% 0,rgba(0,255,102,.3),transparent 70%);filter:blur(10px);pointer-events:none}
+  .sl-fill{position:absolute;top:0;bottom:0;left:0;width:100%;border-radius:4px;background:linear-gradient(90deg,#00C853,#00FF66 60%,#9CFFC2);box-shadow:0 0 10px rgba(0,255,102,.9);transform:translateX(-100%);animation:slFill var(--sl-dur) cubic-bezier(.22,.61,.36,1) forwards;will-change:transform}
+  .sl-glow{position:absolute;left:3px;right:3px;top:50%;height:64px;margin-top:-32px;pointer-events:none;background:radial-gradient(ellipse 18% 55% at 100% 50%,rgba(0,255,102,.6),rgba(0,255,102,.14) 45%,transparent 72%);filter:blur(7px);transform:translateX(-100%);animation:slFill var(--sl-dur) cubic-bezier(.22,.61,.36,1) forwards;will-change:transform}
+  @keyframes slFill{from{transform:translateX(-100%)}to{transform:translateX(0)}}
   .sl-pct{font:500 12px/1 var(--mono);color:#8A939C;min-width:3.2em;font-variant-numeric:tabular-nums}
+  .sl-pct::after{content:counter(slpct) "%";counter-reset:slpct var(--slp);animation:slCount var(--sl-dur) cubic-bezier(.22,.61,.36,1) forwards}
+  .sl-pct.js-count::after{content:none}
+  @keyframes slCount{from{--slp:1}to{--slp:100}}
   .sl-label{position:absolute;bottom:36px;left:0;right:0;text-align:center;font:500 10.5px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:#4E565D}
-  @media (prefers-reduced-motion:reduce){.sl-fill,.sl-spill,.site-loader,.sl-head{transition:none}}
+  @media (prefers-reduced-motion:reduce){.site-loader{--sl-dur:.8s}}
   #blobs{position:fixed;inset:0;width:100%;height:100%;z-index:-1;display:block;background:var(--ground)}
   a{color:var(--green)} a:hover{color:var(--yellow)}
   h1,h2,h3,h4,p{margin:0}
@@ -490,48 +495,45 @@
 <a class="skip" href="#main">Skip to content</a>
 <div class="site-loader" id="siteLoader" role="status" aria-live="polite" aria-label="Loading GASMAX">
   <div class="sl-head"><div class="sl-title">GASMAX</div><div class="sl-sub">The premier on-chain refueling protocol</div></div>
-  <div class="sl-row"><div class="sl-frame"><div class="sl-track"><div class="sl-fill"></div></div><div class="sl-spill"></div></div><div class="sl-pct">4%</div></div>
+  <div class="sl-row"><div class="sl-frame"><div class="sl-track"><div class="sl-fill"></div></div><div class="sl-glow"></div></div><div class="sl-pct" aria-hidden="true"></div></div>
   <div class="sl-label">Loading pit lane</div>
 </div>
 <script>
 (() => {
   const el = document.getElementById('siteLoader'); if (!el) return;
-  const fill = el.querySelector('.sl-fill'), spill = el.querySelector('.sl-spill'), pct = el.querySelector('.sl-pct'), lbl = el.querySelector('.sl-label');
+  const fill = el.querySelector('.sl-fill'), pct = el.querySelector('.sl-pct'), lbl = el.querySelector('.sl-label');
   const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  /* the bar runs on its own clock: at least MIN_MS from first paint to 100%, real progress can only hold it back */
-  const MIN_MS = reduced ? 600 : 3200;
+  const DUR = reduced ? 800 : 3000;
   const t0 = performance.now();
-  let real = 0.04, shown = 0.04, complete = false, finished = false, last = t0;
-  document.documentElement.classList.add('is-loading');
-  const ease = (k) => 1 - Math.pow(1 - k, 2.2);
+  let animDone = false, ready = false, finished = false, real = 0;
   const finishCbs = [];
-  const paint = () => { fill.style.width = (shown * 100).toFixed(2) + '%'; spill.style.transform = 'scaleX(' + shown.toFixed(4) + ')'; pct.textContent = Math.round(shown * 100) + '%'; };
-  const finish = () => { finished = true; shown = 1; paint(); if (lbl) lbl.textContent = 'Ready'; setTimeout(() => { el.classList.add('out'); document.documentElement.classList.remove('is-loading'); setTimeout(() => { el.remove(); finishCbs.splice(0).forEach(cb => { try { cb(); } catch (e) {} }); }, 900); }, 260); };
-  const tick = (now) => {
-    if (finished) return;
-    const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
-    const k = Math.min(1, (now - t0) / MIN_MS);
-    const timeCap = 0.04 + 0.96 * ease(k);
-    const realCap = complete ? 1 : Math.min(0.97, real);
-    const target = Math.min(realCap, timeCap);
-    shown = reduced ? target : shown + (target - shown) * Math.min(1, dt * 9);
-    if (complete && k >= 1 && shown > 0.995) { finish(); return; }
-    paint();
-    requestAnimationFrame(tick);
+  document.documentElement.classList.add('is-loading');
+  /* browsers without @property count with a script on the same clock and easing */
+  if (!(window.CSS && CSS.registerProperty)) {
+    pct.classList.add('js-count');
+    const ease = t => 1 - Math.pow(1 - t, 2.4);
+    const count = (now) => { const k = Math.min(1, (now - t0) / DUR); pct.textContent = Math.max(1, Math.round(1 + 99 * ease(k))) + '%'; if (k < 1 && !finished) requestAnimationFrame(count); };
+    requestAnimationFrame(count);
+  }
+  const maybeFinish = () => {
+    if (finished || !animDone || !ready) return;
+    finished = true;
+    if (lbl) lbl.textContent = 'Ready';
+    setTimeout(() => { el.classList.add('out'); document.documentElement.classList.remove('is-loading'); setTimeout(() => { el.remove(); finishCbs.splice(0).forEach(cb => { try { cb(); } catch (e) {} }); }, 900); }, 250);
   };
+  fill.addEventListener('animationend', () => { animDone = true; maybeFinish(); });
+  setTimeout(() => { animDone = true; maybeFinish(); }, DUR + 400);
   window.__loading = {
-    set(f, label) { if (finished) return; real = Math.max(real, f); if (label && lbl && !complete) lbl.textContent = label; },
-    done() { complete = true; },
+    set(f) { real = Math.max(real, f || 0); },
+    done() { ready = true; maybeFinish(); },
     onFinish(cb) { if (finished && !document.getElementById('siteLoader')) cb(); else finishCbs.push(cb); },
-    _debug: { tick, state: () => ({ shown, real, complete, finished, elapsed: performance.now() - t0 }) }
+    _debug: { state: () => ({ animDone, ready, finished, real, elapsed: performance.now() - t0 }) }
   };
   window.__loading.fail = window.__loading.done;
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => el.classList.add('fonts'));
   setTimeout(() => el.classList.add('fonts'), 700);
-  window.addEventListener('load', () => window.__loading.set(0.3));
-  setTimeout(() => { if (!complete && real <= 0.3) { const sc = document.querySelector('.scene'); if (sc) sc.classList.add('nogl'); window.__loading.done(); } }, 12000);
+  setTimeout(() => { if (!ready && real <= 0.3) { const sc = document.querySelector('.scene'); if (sc) sc.classList.add('nogl'); window.__loading.done(); } }, 12000);
   setTimeout(() => window.__loading.done(), 30000);
-  requestAnimationFrame(tick);
 })();
 </script>
 <canvas id="blobs" aria-hidden="true"></canvas>
